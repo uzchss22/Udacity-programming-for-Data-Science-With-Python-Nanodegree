@@ -1,0 +1,85 @@
+1. 
+WITH CustomerRentalCounts AS (
+    SELECT
+        CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+        COUNT(r.rental_id) AS total_rentals
+    FROM
+        rental r
+        JOIN customer c ON r.customer_id = c.customer_id
+    GROUP BY
+        customer_name
+)
+
+SELECT
+    customer_name,
+    total_rentals
+FROM
+    CustomerRentalCounts
+ORDER BY
+    total_rentals DESC
+LIMIT 10;
+
+2.
+SELECT CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+       SUM(p.amount) AS total_payment,
+       RANK() OVER (ORDER BY SUM(p.amount) DESC) AS payment_rank
+FROM payment p
+JOIN customer c ON p.customer_id = c.customer_id
+GROUP BY c.customer_id
+ORDER BY total_payment DESC LIMIT 10;
+
+3.
+WITH CategoryAverageRentalDuration AS (
+  SELECT
+    c.name AS category_name,
+    ROUND(AVG(f.rental_duration)::numeric, 2) AS avg_rental_duration,
+    ROW_NUMBER() OVER (ORDER BY AVG(f.rental_duration) DESC) AS duration_rank
+  FROM film_category fc
+  JOIN film f ON fc.film_id = f.film_id
+  JOIN category c ON fc.category_id = c.category_id
+  GROUP BY c.name
+)
+
+SELECT
+  card.category_name,
+  card.avg_rental_duration,
+  card.duration_rank
+FROM CategoryAverageRentalDuration card
+WHERE card.duration_rank <= 10
+ORDER BY card.duration_rank;
+
+
+4.
+WITH MonthlyMovieSales AS (
+    SELECT
+        TO_CHAR(p.payment_date, 'YYYY-MM') AS month,
+        f.title AS movie_title,
+        SUM(p.amount) AS total_sales,
+        RANK() OVER (PARTITION BY TO_CHAR(p.payment_date, 'YYYY-MM') ORDER BY SUM(p.amount) DESC) AS monthly_rank
+    FROM
+        payment p
+        JOIN rental r ON p.rental_id = r.rental_id
+        JOIN inventory i ON r.inventory_id = i.inventory_id
+        JOIN film f ON i.film_id = f.film_id
+    GROUP BY
+        TO_CHAR(p.payment_date, 'YYYY-MM'),
+        f.title
+)
+
+SELECT
+    month,
+    movie_title,
+    total_sales
+FROM (
+    SELECT
+        month,
+        movie_title,
+        total_sales,
+        ROW_NUMBER() OVER (PARTITION BY month ORDER BY total_sales DESC) AS row_num
+    FROM
+        MonthlyMovieSales
+) ranked_movies
+WHERE
+    row_num = 1
+ORDER BY
+    month DESC, total_sales DESC;
